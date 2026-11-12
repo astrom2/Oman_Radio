@@ -183,6 +183,7 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
     val loading by RadioRepo.loading.collectAsState()
     val error by RadioRepo.error.collectAsState()
     val sleepAt by RadioRepo.sleepAt.collectAsState()
+    val hiddenCount by RadioRepo.hiddenCount.collectAsState()
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
@@ -325,7 +326,14 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
             item(key = s.key) {
                 StationRow(s, i == cur,
                     onClick = { player?.let { p -> p.seekToDefaultPosition(i); if (p.playbackState == Player.STATE_IDLE) p.prepare(); p.play() } },
-                    onLongClick = { if (s.custom) removing = s })
+                    onLongClick = { removing = s })
+            }
+        }
+        if (hiddenCount > 0) {
+            item(key = "unhide") {
+                TextButton(onClick = { RadioRepo.unhideAll() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("إظهار المحطات المخفية ($hiddenCount)", color = col.accent)
+                }
             }
         }
     }
@@ -334,8 +342,13 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
     removing?.let { s ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("حذف «${s.title}»؟") },
-            confirmButton = { TextButton(onClick = { RadioRepo.removeCustom(s.key); removing = null }) { Text("حذف") } },
+            title = { Text(if (s.custom) "حذف «${s.title}»؟" else "إخفاء «${s.title}» من القائمة؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (s.custom) RadioRepo.removeCustom(s.key) else RadioRepo.hide(s.key)
+                    removing = null
+                }) { Text(if (s.custom) "حذف" else "إخفاء") }
+            },
             dismissButton = { TextButton(onClick = { removing = null }) { Text("إلغاء") } },
         )
     }
