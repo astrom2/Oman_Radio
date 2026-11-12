@@ -29,13 +29,19 @@ data class Station(
     val subtitle: String get() = if (ar.isNotBlank()) latin else ""
     private val latin: String get() = latinPart(name)
     val monogram: String
-        get() = title.removePrefix("ال").trim().firstOrNull()?.uppercase() ?: "?"
+        get() {
+            val word = title.split(" ").firstOrNull { it.isNotBlank() && it !in GENERIC } ?: title
+            return word.removePrefix("ال").trim().firstOrNull()?.uppercase() ?: "?"
+        }
 
     companion object {
         private val arabic = Regex("[\\u0600-\\u06FF][\\u0600-\\u06FF\\s.\\-]*[\\u0600-\\u06FF]")
-        fun arabicPart(n: String) = arabic.find(n)?.value?.trim() ?: ""
-        fun latinPart(n: String) = n.replace(Regex("\\(.*?\\)"), "")
-            .replace(Regex("[\\u0600-\\u06FF]"), "").replace(Regex("\\s+"), " ").trim()
+        private val GENERIC = setOf("إذاعة", "اذاعة", "راديو", "Radio", "radio")
+        // Directory names often use dashes/underscores as spaces ("إذاعة-القرآن-الكريم", "-- Quran Program").
+        private fun tidy(t: String) = t.replace(Regex("[-_.|]+"), " ").replace(Regex("\\s+"), " ")
+            .trim { !it.isLetterOrDigit() && it != ')' }
+        fun arabicPart(n: String) = tidy(arabic.find(n)?.value ?: "")
+        fun latinPart(n: String) = tidy(n.replace(Regex("\\(.*?\\)"), "").replace(Regex("[\\u0600-\\u06FF]"), ""))
         fun keyOf(n: String): String =
             latinPart(n).lowercase().replace(Regex("[^a-z0-9]"), "").ifBlank { arabicPart(n) }
     }
