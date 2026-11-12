@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tuning dial: amber ring, scale ticks and a needle -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#E3A540" android:strokeWidth="4"
+        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path android:strokeColor="#ECE4D6" android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:pathData="M40,58v-6M46,58v-9M52,58v-6M58,58v-9M64,58v-6M70,58v-4M38,58h34" />
+    <path android:strokeColor="#E3A540" android:strokeWidth="3" android:strokeLineCap="round"
+        android:pathData="M55,44v22" />
+    <path android:fillColor="#E3A540"
+        android:pathData="M55,40a3,3 0,1 1,0 6a3,3 0,1 1,0 -6z" />
+</vector>
