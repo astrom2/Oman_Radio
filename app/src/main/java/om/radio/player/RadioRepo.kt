@@ -58,22 +58,23 @@ object RadioRepo {
         "de2.api.radio-browser.info", "nl1.api.radio-browser.info",
     )
 
-    private const val CACHE_VERSION = 3
+    private const val CACHE_VERSION = 4
 
     /** International Arabic/news stations, found in the directory by name rather than by country. */
     private class Intl(
-        val key: String, val ar: String, val en: String, val query: String,
+        val key: String, val ar: String, val en: String, val queries: List<String>,
         val match: Regex, val exclude: Regex? = null, val prefer: Regex? = null, val language: String? = null,
     )
     private val I = RegexOption.IGNORE_CASE
     private val INTL = listOf(
-        Intl("intl-mcd", "مونت كارلو الدولية", "Monte Carlo Doualiya", "monte carlo doualiya",
-            Regex("monte\\s*carlo\\s*doualiya|مونت\\s*كارلو", I)),
-        Intl("intl-sawa", "راديو سوا", "Radio Sawa", "sawa",
+        // The directory spells it several ways: "Monte Carlo Doualiya", "Montecarlo al doualiya", Arabic only…
+        Intl("intl-mcd", "مونت كارلو الدولية", "Monte Carlo Doualiya", listOf("doualiya", "dawliya", "مونت كارلو", "montecarlo"),
+            Regex("doualiya|dawliya|مونت\\s*كارلو|monte\\s*-?\\s*carlo\\s+(al\\s+)?d", I)),
+        Intl("intl-sawa", "راديو سوا", "Radio Sawa", listOf("sawa", "راديو سوا"),
             Regex("radio\\s*sawa|راديو\\s*سوا", I), prefer = Regex("gulf|khaleej|خليج", I)),
-        Intl("intl-jazeera", "الجزيرة", "Al Jazeera Arabic", "jazeera",
+        Intl("intl-jazeera", "الجزيرة", "Al Jazeera Arabic", listOf("jazeera", "الجزيرة"),
             Regex("jazeera|الجزيرة", I), exclude = Regex("english|balkan|mubasher|مباشر|documentary|وثائقية|kids|أطفال", I)),
-        Intl("intl-bbcws", "بي بي سي العالمية", "BBC World Service", "bbc world service",
+        Intl("intl-bbcws", "بي بي سي العالمية", "BBC World Service", listOf("bbc world service"),
             Regex("bbc\\s*world\\s*service", I), language = "english"),
     )
 
@@ -161,10 +162,11 @@ object RadioRepo {
                 val o = byName.getJSONObject(i)
                 if (o.optString("countrycode") == "OM" || Regex("\\boman\\b", RegexOption.IGNORE_CASE).containsMatchIn(o.optString("name"))) raw += o
             }
-            // Oman stations, minus any international ones that are also listed under Oman
-            val oman = group(raw).filterNot { s -> INTL.any { it.match.containsMatchIn(s.name) } }
             val intlFresh = INTL.mapNotNull { d -> runCatching { buildIntl(d) }.getOrNull() }
             val intl = intlFresh.ifEmpty { all.filter { it.intl } }
+            // Move a station out of the Oman list only when its international entry was actually found.
+            val moved = INTL.filter { d -> intl.any { it.key == d.key } }
+            val oman = group(raw).filterNot { s -> moved.any { it.match.containsMatchIn(s.name) } }
             if (oman.isNotEmpty() || intl.isNotEmpty()) {
                 all = oman + intl
                 prefs.edit().putString("stations", toJson(all).toString())
@@ -180,11 +182,16 @@ object RadioRepo {
     }
 
     private suspend fun buildIntl(d: Intl): Station? {
-        val arr = fetchJson("stations/search?name=${URLEncoder.encode(d.query, "UTF-8")}&hidebroken=true&order=votes&reverse=true&limit=60")
+        val rows = mutableListOf<JSONObject>()
+        for (q in d.queries) {
+            val arr = runCatching {
+                fetchJson("stations/search?name=${URLEncoder.encode(q, "UTF-8")}&hidebroken=true&order=votes&reverse=true&limit=60")
+            }.getOrNull() ?: continue
+            for (i in 0 until arr.length()) rows += arr.getJSONObject(i)
+        }
         data class V(val v: Variant, val ok: Boolean, val preferred: Boolean)
         val found = mutableListOf<V>()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
+        for (o in rows) {
             val n = o.optString("name")
             if (!d.match.containsMatchIn(n) || d.exclude?.containsMatchIn(n) == true) continue
             if (d.language != null && !o.optString("language").contains(d.language, true)) continue
