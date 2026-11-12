@@ -58,7 +58,7 @@ object RadioRepo {
         "de2.api.radio-browser.info", "nl1.api.radio-browser.info",
     )
 
-    private const val CACHE_VERSION = 2
+    private const val CACHE_VERSION = 3
 
     /** International Arabic/news stations, found in the directory by name rather than by country. */
     private class Intl(
