@@ -252,6 +252,7 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
                         val s = stations[page]
                         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center) {
+                            if (s.intl) Text("إذاعة دولية", color = col.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             Text(s.title, color = col.ink, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 36.sp)
                             val sub = listOfNotNull(
@@ -316,10 +317,16 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
             }
         }
 
-        itemsIndexed(stations, key = { _, s -> s.key }) { i, s ->
-            StationRow(s, i == cur,
-                onClick = { player?.let { p -> p.seekToDefaultPosition(i); if (p.playbackState == Player.STATE_IDLE) p.prepare(); p.play() } },
-                onLongClick = { if (s.custom) removing = s })
+        stations.forEachIndexed { i, s ->
+            val section = sectionOf(s)
+            if (i == 0 || sectionOf(stations[i - 1]) != section) {
+                item(key = "h-$section") { SectionHeader(section) }
+            }
+            item(key = s.key) {
+                StationRow(s, i == cur,
+                    onClick = { player?.let { p -> p.seekToDefaultPosition(i); if (p.playbackState == Player.STATE_IDLE) p.prepare(); p.play() } },
+                    onLongClick = { if (s.custom) removing = s })
+            }
         }
     }
 
@@ -332,6 +339,19 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
             dismissButton = { TextButton(onClick = { removing = null }) { Text("إلغاء") } },
         )
     }
+}
+
+private fun sectionOf(s: Station) = when {
+    s.custom -> "محطاتك"
+    s.intl -> "إذاعات دولية"
+    else -> "إذاعات عُمان"
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    val col = LocalColors.current
+    Text(title, color = col.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
 }
 
 @Composable
