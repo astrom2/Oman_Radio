@@ -60,6 +60,7 @@ class PlaybackService : MediaSessionService() {
     private val variantIndex = HashMap<String, Int>()
     private val artCache = HashMap<String, ByteArray>()
     private var failHops = 0
+    private var hfRetries = 0
 
     // A paused live stream keeps downloading; after a minute of pause we close the connection.
     private val dropConnection = Runnable { if (!exo.playWhenReady) exo.stop() }
@@ -95,7 +96,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(RoutingDataSource.Factory(DefaultDataSource.Factory(this, http))))
             .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
@@ -132,7 +133,19 @@ class PlaybackService : MediaSessionService() {
     private fun applyPlaylist(stations: List<Station>) {
         val newKeys = stations.map { it.key }
         list = stations
-        if (newKeys == keys) return
+        if (newKeys == keys) {
+            // Same stations; an HF frequency may have been fine-tuned → swap just that item.
+            for (i in 0 until minOf(exo.mediaItemCount, stations.size)) {
+                val st = stations[i]
+                if (st.hf == null) continue
+                val want = st.variants.first().url
+                if (exo.getMediaItemAt(i).localConfiguration?.uri?.toString() != want) {
+                    exo.replaceMediaItem(i, st.toItem(0))
+                    if (i == exo.currentMediaItemIndex && exo.playWhenReady) exo.prepare()
+                }
+            }
+            return
+        }
         val keep = exo.currentMediaItem?.mediaId ?: RadioRepo.currentKey
         keys = newKeys
         if (stations.isEmpty()) { exo.clearMediaItems(); return }
@@ -144,7 +157,7 @@ class PlaybackService : MediaSessionService() {
         val v = variants[vi.coerceIn(0, variants.lastIndex)]
         val meta = MediaMetadata.Builder()
             .setTitle(title)
-            .setArtist("راديو عُمان · بث مباشر")
+            .setArtist(hf?.let { "موجات قصيرة · ${it.khz.fmtKhz()} kHz ${it.modeLabel}" } ?: "راديو عُمان · بث مباشر")
             .setStation(title)
             .setArtworkData(artwork(this), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
             .setIsPlayable(true)
@@ -152,6 +165,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         val b = MediaItem.Builder().setMediaId(key).setUri(v.url).setMediaMetadata(meta)
         if (v.hls) b.setMimeType(MimeTypes.APPLICATION_M3U8)
+        if (hf != null) b.setMimeType(MimeTypes.AUDIO_WAV)
         return b.build()
     }
 
@@ -181,16 +195,29 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) { failHops = 0; RadioRepo.error.value = null }
+            if (isPlaying) { failHops = 0; hfRetries = 0; RadioRepo.error.value = null }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            hfRetries = 0
             mediaItem?.mediaId?.let { RadioRepo.currentKey = it }
         }
 
         override fun onPlayerError(error: PlaybackException) {
             val idx = exo.currentMediaItemIndex
             val st = current() ?: return
+            // HF: a receiver dropped us or was full → try again (the next nearest receiver is picked).
+            if (st.hf != null) {
+                if (hfRetries < 2) {
+                    hfRetries++
+                    RadioRepo.error.value = "جاري تجربة مستقبِل آخر…"
+                    exo.prepare(); exo.play()
+                } else {
+                    hfRetries = 0
+                    RadioRepo.error.value = error.cause?.message ?: "تعذّر الاتصال بمستقبِلات HF"
+                }
+                return
+            }
             // 1) try the station's other stream addresses
             val next = (variantIndex[st.key] ?: 0) + 1
             if (next < st.variants.size) {

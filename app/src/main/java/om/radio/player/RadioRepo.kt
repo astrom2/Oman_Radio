@@ -15,6 +15,43 @@ import java.util.Calendar
 
 data class Variant(val url: String, val bitrate: Int, val codec: String, val hls: Boolean)
 
+/** A broadcast window in UTC: days are Calendar.SUNDAY..SATURDAY, minutes from 00:00 UTC. */
+data class Win(val days: Set<Int>, val startUtc: Int, val endUtc: Int)
+
+data class HfInfo(
+    val khz: Double, val mode: String, val world: Boolean,
+    val lat: Double, val lon: Double, val windows: List<Win> = emptyList(),
+) {
+    val alwaysOn get() = windows.isEmpty()
+
+    fun onAirNow(): Boolean {
+        if (alwaysOn) return true
+        val c = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        val day = c.get(Calendar.DAY_OF_WEEK)
+        val min = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+        return windows.any { day in it.days && min >= it.startUtc && min < it.endUtc }
+    }
+
+    /** e.g. "19:00–19:30 الأحد–الخميس" in the phone's local time. */
+    fun scheduleText(): String {
+        if (alwaysOn) return "على مدار الساعة"
+        val off = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000
+        fun hm(m: Int) = ((m + off) % 1440 + 1440).rem(1440).let { "%02d:%02d".format(java.util.Locale.US, it / 60, it % 60) }
+        return windows.joinToString("، ") { w -> "${hm(w.startUtc)}–${hm(w.endUtc)}${dayText(w.days)}" }
+    }
+
+    private fun dayText(d: Set<Int>): String = when {
+        d.size == 7 -> ""
+        d == setOf(1, 2, 3, 4, 5) -> " الأحد–الخميس"
+        d == setOf(2, 3, 4, 5, 6) -> " الإثنين–الجمعة"
+        d == setOf(1) -> " الأحد"
+        else -> ""
+    }
+
+    val modeLabel get() = mode.uppercase()
+    fun kiwiUri() = "kiwi://auto?f=$khz&m=$mode&lat=$lat&lon=$lon"
+}
+
 data class Station(
     val key: String,
     val name: String,
@@ -23,6 +60,7 @@ data class Station(
     val variants: List<Variant>,
     val custom: Boolean = false,
     val intl: Boolean = false,
+    val hf: HfInfo? = null,
 ) {
     val kbps: Int get() = variants.firstOrNull()?.bitrate ?: 0
     val title: String get() = ar.ifBlank { latin.ifBlank { name } }
@@ -46,6 +84,8 @@ data class Station(
             latinPart(n).lowercase().replace(Regex("[^a-z0-9]"), "").ifBlank { arabicPart(n) }
     }
 }
+
+fun Double.fmtKhz(): String = if (this % 1.0 == 0.0) toLong().toString() else "%.1f".format(java.util.Locale.US, this)
 
 fun mbPerHour(kbps: Int): Double = kbps * 3600.0 / 8.0 / 1024.0
 
@@ -96,6 +136,7 @@ object RadioRepo {
         saver.value = prefs.getBoolean("saver", false)
         all = prefs.getString("stations", null)?.let { parseCache(it) } ?: emptyList()
         usageMb.value = prefs.getFloat(monthKey(), 0f).toDouble()
+        manualRx.value = manualReceiver
         publish()
     }
 
@@ -140,6 +181,67 @@ object RadioRepo {
     private fun customStations(): List<Station> =
         prefs.getString("custom", null)?.let { parseCache(it, custom = true) } ?: emptyList()
 
+    /* ---------------- HF (shortwave) through public KiwiSDR receivers ---------------- */
+
+    // Oman is the default listening spot; worldwide signals use a receiver near the transmitter.
+    private const val OM_LAT = 23.6
+    private const val OM_LON = 58.5
+    private val DAILY = (1..7).toSet()
+    private fun w(days: Set<Int>, from: String, to: String): Win {
+        fun m(t: String) = t.substring(0, 2).toInt() * 60 + t.substring(2).toInt()
+        return Win(days, m(from), m(to))
+    }
+    private fun hf(key: String, ar: String, en: String, khz: Double, mode: String, vararg wins: Win,
+                   world: Boolean = false, lat: Double = OM_LAT, lon: Double = OM_LON) =
+        Station(key, en, ar, 0, emptyList(), hf = HfInfo(khz, mode, world, lat, lon, wins.toList()))
+
+    // Broadcast times: British DX Club "Middle East on Shortwave", winter season B26 (to late March 2027).
+    private val HF_PRESETS = listOf(
+        hf("hf-bbc-ar", "بي بي سي عربي · مرحّل عُمان", "BBC Arabic", 9650.0, "am", w(setOf(1, 2, 3, 4, 5), "1500", "1530")),
+        hf("hf-bbc-en", "بي بي سي بالإنجليزية · مرحّل عُمان", "BBC World Service", 12095.0, "am",
+            w(setOf(2, 3, 4, 5, 6), "1500", "1700"), w(setOf(1), "1500", "1830")),
+        hf("hf-bbc-fa", "بي بي سي فارسي · مرحّل عُمان", "BBC Persian", 6000.0, "am", w(DAILY, "1630", "1700")),
+        hf("hf-kuwait", "إذاعة الكويت", "Radio Kuwait", 7250.0, "am", w(DAILY, "0800", "1000")),
+        hf("hf-vot-ar", "صوت تركيا بالعربية", "Voice of Turkiye Arabic", 7255.0, "am", w(DAILY, "1500", "1600")),
+        hf("hf-vot-en", "صوت تركيا بالإنجليزية", "Voice of Turkiye English", 7285.0, "am", w(DAILY, "0400", "0500")),
+        hf("hf-irib-1", "الإذاعة الإيرانية العربية", "IRIB Arabic", 15135.0, "am", w(DAILY, "0600", "0830"), w(DAILY, "1430", "1730")),
+        hf("hf-irib-2", "الإذاعة الإيرانية العربية", "IRIB Arabic", 15240.0, "am", w(DAILY, "0930", "1430")),
+        hf("hf-ham40", "هواة اللاسلكي · 40 متر", "Amateur 40 m", 7150.0, "lsb"),
+        hf("hf-ham20", "هواة اللاسلكي · 20 متر", "Amateur 20 m", 14200.0, "usb"),
+        hf("hf-ncdxf", "منارات NCDXF العالمية", "NCDXF beacons", 14100.0, "cw"),
+        hf("hf-wwv", "إشارة الوقت WWV · أمريكا", "WWV time signal", 10000.0, "am", world = true, lat = 40.68, lon = -105.04),
+        hf("hf-chu", "إشارة الوقت CHU · كندا", "CHU time signal", 7850.0, "usb", world = true, lat = 45.29, lon = -75.75),
+        hf("hf-volmet", "شانون فولمت · طقس الطيران", "Shannon VOLMET", 5505.0, "usb", world = true, lat = 52.75, lon = -8.93),
+    )
+    const val HF_KBPS = 48   // compressed HF audio, about 21 MB per hour
+
+    /** Receiver chosen by the HF player (station link → receiver name), shown on screen. */
+    val hfReceiver = MutableStateFlow<Pair<String, String>?>(null)
+
+    /** A fixed receiver (host:port) set by the user, or null for automatic choice. */
+    var manualReceiver: String?
+        get() = if (::prefs.isInitialized) prefs.getString("rx", null) else null
+        set(v) { prefs.edit().putString("rx", v?.trim()?.ifBlank { null }).apply(); manualRx.value = manualReceiver }
+    val manualRx = MutableStateFlow<String?>(null)
+
+    private fun hfStations(): List<Station> = HF_PRESETS.map { s ->
+        val khz = prefs.getFloat("tune-${s.key}", s.hf!!.khz.toFloat()).toDouble()
+        val info = s.hf.copy(khz = khz)
+        s.copy(hf = info, variants = listOf(Variant(info.kiwiUri(), HF_KBPS, "HF", false)))
+    }
+
+    /** Fine tuning for HF stations, in kHz. */
+    fun tuneHf(key: String, deltaKhz: Double) {
+        val base = HF_PRESETS.firstOrNull { it.key == key }?.hf ?: return
+        val now = prefs.getFloat("tune-$key", base.khz.toFloat()) + deltaKhz.toFloat()
+        prefs.edit().putFloat("tune-$key", now.coerceIn(100f, 30_000f)).apply()
+        publish()
+    }
+
+    fun resetTune(key: String) { prefs.edit().remove("tune-$key").apply(); publish() }
+
+    fun presetKhz(key: String): Double? = HF_PRESETS.firstOrNull { it.key == key }?.hf?.khz
+
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
 
@@ -162,7 +264,7 @@ object RadioRepo {
         hiddenCount.value = hidden.size
         val combined = customStations() + all.filter { s ->
             s.key !in hidden && BLOCKED.none { it.containsMatchIn(s.name) }
-        }
+        } + hfStations().filter { it.key !in hidden }
         _stations.value = if (saver.value)
             combined.filter { it.custom || it.kbps == 0 || it.kbps <= SAVER_MAX_KBPS }
         else combined

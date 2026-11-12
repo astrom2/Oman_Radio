@@ -184,6 +184,9 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
     val error by RadioRepo.error.collectAsState()
     val sleepAt by RadioRepo.sleepAt.collectAsState()
     val hiddenCount by RadioRepo.hiddenCount.collectAsState()
+    val receiver by RadioRepo.hfReceiver.collectAsState()
+    val manualRx by RadioRepo.manualRx.collectAsState()
+    var editingRx by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
@@ -249,14 +252,21 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
                         Text(if (loading) "جاري جلب محطات عُمان…" else "لا توجد محطات بعد", color = col.muted)
                     }
                 } else {
-                    HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().height(110.dp)) { page ->
+                    HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().height(124.dp)) { page ->
                         val s = stations[page]
                         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center) {
                             if (s.intl) Text("إذاعة دولية", color = col.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            s.hf?.let { h ->
+                                Text("موجات قصيرة · ${h.khz.fmtKhz()} kHz ${h.modeLabel}", color = col.accent, fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold, style = TextStyle(textDirection = TextDirection.Rtl))
+                            }
                             Text(s.title, color = col.ink, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 36.sp)
-                            val sub = listOfNotNull(
+                            val sub = if (s.hf != null) listOfNotNull(
+                                (if (s.hf.onAirNow()) "على الهواء الآن" else "يبث ${s.hf.scheduleText()}"),
+                                "≈ ${mbPerHour(s.kbps).roundToInt()} م.ب/ساعة",
+                            ).joinToString(" · ") else listOfNotNull(
                                 s.subtitle.takeIf { it.isNotBlank() },
                                 s.kbps.takeIf { it > 0 }?.let { "$it kbps" },
                                 s.kbps.takeIf { it > 0 }?.let { "≈ ${mbPerHour(it).roundToInt()} م.ب/ساعة" },
@@ -267,6 +277,8 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
                     }
                 }
                 TuningScale(pager, stations.size)
+                val curStation = stations.getOrNull(cur)
+                if (curStation?.hf != null) HfTuner(curStation, receiver)
                 Text("اسحب يميناً للمحطة التالية، ويساراً للسابقة", color = col.muted, fontSize = 12.sp)
             }
         }
@@ -321,7 +333,17 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
         stations.forEachIndexed { i, s ->
             val section = sectionOf(s)
             if (i == 0 || sectionOf(stations[i - 1]) != section) {
-                item(key = "h-$section") { SectionHeader(section) }
+                item(key = "h-$section") {
+                    if (s.hf != null && !s.hf.world) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) { SectionHeader(section) }
+                            TextButton(onClick = { editingRx = true }) {
+                                Text(if (manualRx == null) "المستقبِل: تلقائي" else "المستقبِل: $manualRx", color = col.accent, fontSize = 12.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    } else SectionHeader(section)
+                }
             }
             item(key = s.key) {
                 StationRow(s, i == cur,
@@ -338,6 +360,7 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
         }
     }
 
+    if (editingRx) ReceiverDialog(manualRx, onDismiss = { editingRx = false }) { RadioRepo.manualReceiver = it; editingRx = false }
     if (adding) AddStationDialog(onDismiss = { adding = false }) { n, u, k -> RadioRepo.addCustom(n, u, k); adding = false }
     removing?.let { s ->
         AlertDialog(
@@ -355,6 +378,8 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
 }
 
 private fun sectionOf(s: Station) = when {
+    s.hf != null && s.hf.world -> "موجات قصيرة HF · عالمية"
+    s.hf != null -> "موجات قصيرة HF · من منطقتنا"
     s.custom -> "محطاتك"
     s.intl -> "إذاعات دولية"
     else -> "إذاعات عُمان"
@@ -365,6 +390,57 @@ private fun SectionHeader(title: String) {
     val col = LocalColors.current
     Text(title, color = col.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+}
+
+/** −5 / −1 / +1 / +5 kHz nudges for HF, plus the receiver in use. */
+@Composable
+private fun HfTuner(s: Station, receiver: Pair<String, String>?) {
+    val col = LocalColors.current
+    val h = s.hf ?: return
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(bottom = 8.dp)) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                for (d in listOf(-5.0, -1.0, 1.0, 5.0)) {
+                    Text(
+                        (if (d > 0) "+" else "−") + abs(d).toInt(), color = col.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).border(1.dp, col.line, RoundedCornerShape(10.dp))
+                            .clickable { RadioRepo.tuneHf(s.key, d) }.padding(horizontal = 12.dp, vertical = 6.dp)
+                            .semantics { contentDescription = "تحريك التردد ${d.toInt()} كيلوهرتز" },
+                    )
+                    if (d == -1.0) Text("kHz", color = col.muted, fontSize = 12.sp)
+                }
+            }
+        }
+        val preset = RadioRepo.presetKhz(s.key)
+        if (preset != null && preset != h.khz) {
+            Text("رجوع إلى ${preset.fmtKhz()} kHz", color = col.accent, fontSize = 12.sp,
+                modifier = Modifier.clickable { RadioRepo.resetTune(s.key) }.padding(4.dp))
+        }
+        val rxName = receiver?.takeIf { it.first == s.variants.firstOrNull()?.url }?.second
+        if (rxName != null) Text("عبر مستقبِل: $rxName", color = col.muted, fontSize = 11.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+@Composable
+private fun ReceiverDialog(current: String?, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+    var text by remember { mutableStateOf(current ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("مستقبِل HF") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("يختار التطبيق تلقائياً أقرب مستقبِل KiwiSDR متاح. لتثبيت مستقبِل معيّن اكتب عنوانه، مثل example.proxy.kiwisdr.com:8073")
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    OutlinedTextField(text, { text = it.trim() }, singleLine = true, label = { Text("host:port") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(text.ifBlank { null }) }) { Text("حفظ") } },
+        dismissButton = { TextButton(onClick = { onSave(null) }) { Text("تلقائي") } },
+    )
 }
 
 @Composable
@@ -494,10 +570,14 @@ private fun StationRow(s: Station, current: Boolean, onClick: () -> Unit, onLong
         }
         Column(Modifier.weight(1f)) {
             Text(s.title, color = col.ink, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = s.subtitle.ifBlank { if (s.custom) "محطة مضافة · اضغط مطولاً للحذف" else s.variants.firstOrNull()?.codec ?: "" }
+            val sub = s.hf?.let { h -> "${h.khz.fmtKhz()} kHz ${h.modeLabel} · ${h.scheduleText()}" }
+                ?: s.subtitle.ifBlank { if (s.custom) "محطة مضافة · اضغط مطولاً للحذف" else s.variants.firstOrNull()?.codec ?: "" }
             if (sub.isNotBlank()) Text(sub, color = col.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(
+        if (s.hf != null) {
+            val on = s.hf.onAirNow()
+            Text(if (on) "على الهواء" else "خارج الوقت", color = if (on) col.ok else col.muted, fontSize = 12.sp)
+        } else Text(
             if (s.kbps > 0) "${s.kbps} kbps · ${mbPerHour(s.kbps).roundToInt()} م.ب/س" else "—",
             color = if (s.kbps in 1..RadioRepo.SAVER_MAX_KBPS) col.ok else col.muted, fontSize = 12.sp,
         )
