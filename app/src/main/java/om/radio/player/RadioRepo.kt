@@ -140,8 +140,29 @@ object RadioRepo {
     private fun customStations(): List<Station> =
         prefs.getString("custom", null)?.let { parseCache(it, custom = true) } ?: emptyList()
 
+    /** Directory entries left out of the app on purpose. */
+    private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
+
+    val hiddenCount = MutableStateFlow(0)
+    private fun hiddenKeys(): Set<String> = prefs.getStringSet("hidden", emptySet()) ?: emptySet()
+
+    /** Hide a directory station (long-press in the list). */
+    fun hide(key: String) {
+        prefs.edit().putStringSet("hidden", hiddenKeys() + key).apply()
+        publish()
+    }
+
+    fun unhideAll() {
+        prefs.edit().remove("hidden").apply()
+        publish()
+    }
+
     private fun publish() {
-        val combined = customStations() + all
+        val hidden = hiddenKeys()
+        hiddenCount.value = hidden.size
+        val combined = customStations() + all.filter { s ->
+            s.key !in hidden && BLOCKED.none { it.containsMatchIn(s.name) }
+        }
         _stations.value = if (saver.value)
             combined.filter { it.custom || it.kbps == 0 || it.kbps <= SAVER_MAX_KBPS }
         else combined
