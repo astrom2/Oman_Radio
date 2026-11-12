@@ -22,6 +22,7 @@ data class Station(
     val votes: Int,
     val variants: List<Variant>,
     val custom: Boolean = false,
+    val intl: Boolean = false,
 ) {
     val kbps: Int get() = variants.firstOrNull()?.bitrate ?: 0
     val title: String get() = ar.ifBlank { latin.ifBlank { name } }
@@ -51,6 +52,25 @@ object RadioRepo {
         "de2.api.radio-browser.info", "nl1.api.radio-browser.info",
     )
 
+    private const val CACHE_VERSION = 2
+
+    /** International Arabic/news stations, found in the directory by name rather than by country. */
+    private class Intl(
+        val key: String, val ar: String, val en: String, val query: String,
+        val match: Regex, val exclude: Regex? = null, val prefer: Regex? = null, val language: String? = null,
+    )
+    private val I = RegexOption.IGNORE_CASE
+    private val INTL = listOf(
+        Intl("intl-mcd", "مونت كارلو الدولية", "Monte Carlo Doualiya", "monte carlo doualiya",
+            Regex("monte\\s*carlo\\s*doualiya|مونت\\s*كارلو", I)),
+        Intl("intl-sawa", "راديو سوا", "Radio Sawa", "sawa",
+            Regex("radio\\s*sawa|راديو\\s*سوا", I), prefer = Regex("gulf|khaleej|خليج", I)),
+        Intl("intl-jazeera", "الجزيرة", "Al Jazeera Arabic", "jazeera",
+            Regex("jazeera|الجزيرة", I), exclude = Regex("english|balkan|mubasher|مباشر|documentary|وثائقية|kids|أطفال", I)),
+        Intl("intl-bbcws", "بي بي سي العالمية", "BBC World Service", "bbc world service",
+            Regex("bbc\\s*world\\s*service", I), language = "english"),
+    )
+
     private lateinit var prefs: SharedPreferences
     private var all: List<Station> = emptyList()
 
@@ -73,7 +93,7 @@ object RadioRepo {
     }
 
     fun needsRefresh(): Boolean =
-        all.isEmpty() || System.currentTimeMillis() - prefs.getLong("stations_t", 0) > CACHE_DAYS * 86_400_000L
+        all.isEmpty() || prefs.getInt("cache_v", 1) < CACHE_VERSION || System.currentTimeMillis() - prefs.getLong("stations_t", 0) > CACHE_DAYS * 86_400_000L
 
     var currentKey: String?
         get() = prefs.getString("cur", null)
@@ -135,11 +155,15 @@ object RadioRepo {
                 val o = byName.getJSONObject(i)
                 if (o.optString("countrycode") == "OM" || Regex("\\boman\\b", RegexOption.IGNORE_CASE).containsMatchIn(o.optString("name"))) raw += o
             }
-            val grouped = group(raw)
-            if (grouped.isNotEmpty()) {
-                all = grouped
-                prefs.edit().putString("stations", toJson(grouped).toString())
-                    .putLong("stations_t", System.currentTimeMillis()).apply()
+            // Oman stations, minus any international ones that are also listed under Oman
+            val oman = group(raw).filterNot { s -> INTL.any { it.match.containsMatchIn(s.name) } }
+            val intlFresh = INTL.mapNotNull { d -> runCatching { buildIntl(d) }.getOrNull() }
+            val intl = intlFresh.ifEmpty { all.filter { it.intl } }
+            if (oman.isNotEmpty() || intl.isNotEmpty()) {
+                all = oman + intl
+                prefs.edit().putString("stations", toJson(all).toString())
+                    .putLong("stations_t", System.currentTimeMillis())
+                    .putInt("cache_v", CACHE_VERSION).apply()
                 publish()
             }
         } catch (e: Exception) {
@@ -147,6 +171,25 @@ object RadioRepo {
         } finally {
             loading.value = false
         }
+    }
+
+    private suspend fun buildIntl(d: Intl): Station? {
+        val arr = fetchJson("stations/search?name=${URLEncoder.encode(d.query, "UTF-8")}&hidebroken=true&order=votes&reverse=true&limit=60")
+        data class V(val v: Variant, val ok: Boolean, val preferred: Boolean)
+        val found = mutableListOf<V>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val n = o.optString("name")
+            if (!d.match.containsMatchIn(n) || d.exclude?.containsMatchIn(n) == true) continue
+            if (d.language != null && !o.optString("language").contains(d.language, true)) continue
+            val u = o.optString("url_resolved").ifBlank { o.optString("url") }
+            if (u.isBlank() || found.any { it.v.url == u }) continue
+            found += V(Variant(u, o.optInt("bitrate"), o.optString("codec"), o.optInt("hls") == 1 || u.contains(".m3u8", true)),
+                o.optInt("lastcheckok", 1) == 1, d.prefer?.containsMatchIn(n) == true)
+        }
+        if (found.isEmpty()) return null
+        val sorted = found.sortedWith(compareBy({ !it.ok }, { !it.preferred }, { if (it.v.bitrate > 0) it.v.bitrate else 999 }))
+        return Station(d.key, d.en, d.ar, 0, sorted.take(6).map { it.v }, intl = true)
     }
 
     private suspend fun fetchJson(path: String): JSONArray = withContext(Dispatchers.IO) {
@@ -194,7 +237,7 @@ object RadioRepo {
 
     private fun toJson(list: List<Station>) = JSONArray().apply {
         list.forEach { s ->
-            put(JSONObject().put("k", s.key).put("n", s.name).put("a", s.ar).put("v", s.votes)
+            put(JSONObject().put("k", s.key).put("n", s.name).put("a", s.ar).put("v", s.votes).put("i", s.intl)
                 .put("u", JSONArray().apply {
                     s.variants.forEach { put(JSONObject().put("u", it.url).put("b", it.bitrate).put("c", it.codec).put("h", it.hls)) }
                 }))
@@ -210,7 +253,7 @@ object RadioRepo {
                 (0 until u.length()).map { j ->
                     val x = u.getJSONObject(j)
                     Variant(x.getString("u"), x.optInt("b"), x.optString("c"), x.optBoolean("h"))
-                }, custom)
+                }, custom, o.optBoolean("i"))
         }
     }.getOrDefault(emptyList())
 }
