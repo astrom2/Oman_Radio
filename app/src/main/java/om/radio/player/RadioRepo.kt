@@ -209,9 +209,6 @@ object RadioRepo {
         hf("hf-ham40", "هواة اللاسلكي · 40 متر", "Amateur 40 m", 7150.0, "lsb"),
         hf("hf-ham20", "هواة اللاسلكي · 20 متر", "Amateur 20 m", 14200.0, "usb"),
         hf("hf-ncdxf", "منارات NCDXF العالمية", "NCDXF beacons", 14100.0, "cw"),
-        hf("hf-wwv", "إشارة الوقت WWV · أمريكا", "WWV time signal", 10000.0, "am", world = true, lat = 40.68, lon = -105.04),
-        hf("hf-chu", "إشارة الوقت CHU · كندا", "CHU time signal", 7850.0, "usb", world = true, lat = 45.29, lon = -75.75),
-        hf("hf-volmet", "شانون فولمت · طقس الطيران", "Shannon VOLMET", 5505.0, "usb", world = true, lat = 52.75, lon = -8.93),
     )
     const val HF_KBPS = 48   // compressed HF audio, about 21 MB per hour
 
@@ -244,6 +241,12 @@ object RadioRepo {
 
     /** Omani stations the app always carries, even when the directory doesn't list them. */
     private val BUILTIN_OMAN = listOf(
+        // Oman Radio General Program, from the broadcaster's own streaming servers.
+        Station("omanrdo", "Oman Radio General Program", "الإذاعة العامة", 0, listOf(
+            Variant("https://partrdo.mangomolo.com/omanrdo.mp3", 0, "MP3", false),
+            Variant("https://partneta.cdn.mgmlcdn.com/omanrdoorg/omanrdo.stream_aac/chunklist.m3u8", 0, "AAC", true),
+            Variant("https://partne.cdn.mangomolo.com/omanrdoorg/omanrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
+        )),
         // Sultan's Armed Forces radio — 95.1 FM in Muscat (launched 11 Jan 2021).
         Station("alsumood", "Al Sumood FM 95.1", "إذاعة الصمود", 0,
             listOf(Variant("https://us3.internet-radio.com/proxy/alsumoodfm2020?mp=/stream", 0, "MP3", false))),
@@ -255,7 +258,7 @@ object RadioRepo {
             Variant("https://partwota.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
         )),
     )
-    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب", RegexOption.IGNORE_CASE)
+    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة", RegexOption.IGNORE_CASE)
 
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
