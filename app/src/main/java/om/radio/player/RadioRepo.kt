@@ -242,6 +242,14 @@ object RadioRepo {
 
     fun presetKhz(key: String): Double? = HF_PRESETS.firstOrNull { it.key == key }?.hf?.khz
 
+    /** Omani stations the app always carries, even when the directory doesn't list them. */
+    private val BUILTIN_OMAN = listOf(
+        // Sultan's Armed Forces radio — 95.1 FM in Muscat (launched 11 Jan 2021).
+        Station("alsumood", "Al Sumood FM 95.1", "إذاعة الصمود", 0,
+            listOf(Variant("https://us3.internet-radio.com/proxy/alsumoodfm2020?mp=/stream", 0, "MP3", false))),
+    )
+    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود", RegexOption.IGNORE_CASE)
+
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
 
@@ -262,8 +270,8 @@ object RadioRepo {
     private fun publish() {
         val hidden = hiddenKeys()
         hiddenCount.value = hidden.size
-        val combined = customStations() + all.filter { s ->
-            s.key !in hidden && BLOCKED.none { it.containsMatchIn(s.name) }
+        val combined = customStations() + BUILTIN_OMAN.filter { it.key !in hidden } + all.filter { s ->
+            s.key !in hidden && BLOCKED.none { it.containsMatchIn(s.name) } && !BUILTIN_MATCH.containsMatchIn(s.name)
         } + hfStations().filter { it.key !in hidden }
         _stations.value = if (saver.value)
             combined.filter { it.custom || it.kbps == 0 || it.kbps <= SAVER_MAX_KBPS }
