@@ -247,8 +247,14 @@ object RadioRepo {
         // Sultan's Armed Forces radio — 95.1 FM in Muscat (launched 11 Jan 2021).
         Station("alsumood", "Al Sumood FM 95.1", "إذاعة الصمود", 0,
             listOf(Variant("https://us3.internet-radio.com/proxy/alsumoodfm2020?mp=/stream", 0, "MP3", false))),
+        // Oman Radio's youth channel, from the broadcaster's own streaming CDN (same servers as Quran Radio).
+        Station("shabab", "Oman Youth Radio", "إذاعة الشباب", 0, listOf(
+            Variant("https://partne.cdn.mangomolo.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
+            Variant("https://partneta.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/chunklist.m3u8", 0, "AAC", true),
+            Variant("https://partwota.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
+        )),
     )
-    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود", RegexOption.IGNORE_CASE)
+    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب", RegexOption.IGNORE_CASE)
 
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
