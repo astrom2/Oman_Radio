@@ -208,7 +208,6 @@ object RadioRepo {
         hf("hf-irib-2", "الإذاعة الإيرانية العربية", "IRIB Arabic", 15240.0, "am", w(DAILY, "0930", "1430")),
         hf("hf-ham40", "هواة اللاسلكي · 40 متر", "Amateur 40 m", 7150.0, "lsb"),
         hf("hf-ham20", "هواة اللاسلكي · 20 متر", "Amateur 20 m", 14200.0, "usb"),
-        hf("hf-ncdxf", "منارات NCDXF العالمية", "NCDXF beacons", 14100.0, "cw"),
     )
     const val HF_KBPS = 48   // compressed HF audio, about 21 MB per hour
 
