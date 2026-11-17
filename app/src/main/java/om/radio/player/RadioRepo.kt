@@ -249,8 +249,9 @@ object RadioRepo {
             listOf(Variant("https://us3.internet-radio.com/proxy/alsumoodfm2020?mp=/stream", 0, "MP3", false))),
         // Oman Radio's youth channel, from the broadcaster's own streaming CDN (same servers as Quran Radio).
         Station("shabab", "Oman Youth Radio", "إذاعة الشباب", 0, listOf(
-            Variant("https://partne.cdn.mangomolo.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
+            Variant("https://partrdo.mangomolo.com/shababrdo.mp3", 0, "MP3", false),
             Variant("https://partneta.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/chunklist.m3u8", 0, "AAC", true),
+            Variant("https://partne.cdn.mangomolo.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
             Variant("https://partwota.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
         )),
     )
