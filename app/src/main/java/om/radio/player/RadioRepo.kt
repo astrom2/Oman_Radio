@@ -249,6 +249,12 @@ object RadioRepo {
             Variant("https://playoutonestreaming.com/proxy/muscatfm/?mp=/stream", 0, "", false),
             Variant("http://rss-streaming.co.uk:8022/mp3", 0, "MP3", false),
         )),
+        // Shabiba FM, 97.5 / 98.5 FM Muscat — stream from the station's own server.
+        Station("shabibafm", "Shabiba FM", "إذاعة الشبيبة", 0, listOf(
+            Variant("https://stream.shabiba.fm:9010/shabiba", 0, "", false),
+            Variant("http://stream.shabiba.fm:8000/live", 0, "", false),
+            Variant("http://stream.shabiba.fm:8000/shabiba", 0, "", false),
+        )),
         // Oman Radio's youth channel, from the broadcaster's own streaming CDN (same servers as Quran Radio).
         Station("shabab", "Oman Youth Radio", "إذاعة الشباب", 0, listOf(
             Variant("https://partrdo.mangomolo.com/shababrdo.mp3", 0, "MP3", false),
@@ -257,7 +263,14 @@ object RadioRepo {
             Variant("https://partwota.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
         )),
     )
-    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة|muscat\\s*fm|مسقط\\s*(اف|إف)\\s*ام", RegexOption.IGNORE_CASE)
+    /** International stations the app always carries. */
+    private val BUILTIN_INTL = listOf(
+        // Sawt Al Khaleej (Qatar) — also on 107.7 FM Muscat and 91.6 FM Salalah. Zeno stream, not confirmed official.
+        Station("sawtalkhaleej", "Sawt Al Khaleej", "صوت الخليج", 0,
+            listOf(Variant("https://stream.zeno.fm/sawt-alkhaleej.mp3", 0, "MP3", false)), intl = true),
+    )
+
+    private val BUILTIN_MATCH = Regex("shabiba|الشبيبة|sawt\\s*al\\s*khaleej|صوت\\s*الخليج|sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة|muscat\\s*fm|مسقط\\s*(اف|إف)\\s*ام", RegexOption.IGNORE_CASE)
 
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
@@ -281,7 +294,7 @@ object RadioRepo {
         hiddenCount.value = hidden.size
         val combined = customStations() + BUILTIN_OMAN.filter { it.key !in hidden } + all.filter { s ->
             s.key !in hidden && BLOCKED.none { it.containsMatchIn(s.name) } && !BUILTIN_MATCH.containsMatchIn(s.name)
-        } + hfStations().filter { it.key !in hidden }
+        } + BUILTIN_INTL.filter { it.key !in hidden } + hfStations().filter { it.key !in hidden }
         _stations.value = if (saver.value)
             combined.filter { it.custom || it.kbps == 0 || it.kbps <= SAVER_MAX_KBPS }
         else combined
