@@ -262,9 +262,11 @@ object RadioRepo {
     )
     /** International stations the app always carries. */
     private val BUILTIN_INTL = listOf(
-        // Sawt Al Khaleej (Qatar) — also on 107.7 FM Muscat and 91.6 FM Salalah. Zeno stream, not confirmed official.
-        Station("sawtalkhaleej", "Sawt Al Khaleej", "صوت الخليج", 0,
-            listOf(Variant("https://stream.zeno.fm/sawt-alkhaleej.mp3", 0, "MP3", false)), intl = true),
+        // Sawt Al Khaleej (Qatar) — also on 107.7 FM Muscat and 91.6 FM Salalah.
+        Station("sawtalkhaleej", "Sawt Al Khaleej", "صوت الخليج", 0, listOf(
+            Variant("http://ruby.streamguys.com:8120/sar-qatar-2", 0, "", false),
+            Variant("https://stream.zeno.fm/sawt-alkhaleej.mp3", 0, "MP3", false),
+        ), intl = true),
     )
 
     private val BUILTIN_MATCH = Regex("shabiba|الشبيبة|sawt\\s*al\\s*khaleej|صوت\\s*الخليج|sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة|muscat\\s*fm|مسقط\\s*(اف|إف)\\s*ام", RegexOption.IGNORE_CASE)
