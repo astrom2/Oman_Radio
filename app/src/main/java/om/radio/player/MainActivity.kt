@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
@@ -187,6 +188,7 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
     val receiver by RadioRepo.hfReceiver.collectAsState()
     val manualRx by RadioRepo.manualRx.collectAsState()
     var editingRx by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
@@ -231,6 +233,11 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("راديو عُمان", color = col.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(
+                    "عن البرنامج", color = col.accent, fontSize = 13.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { showAbout = true }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
                 Text(
                     "استهلاك الشهر: ${if (usage < 10) "%.1f".format(usage) else usage.roundToInt().toString()} م.ب",
                     color = col.muted, fontSize = 12.sp,
@@ -360,6 +367,7 @@ fun RadioScreen(player: MediaController?, ui: PlayerUi) {
         }
     }
 
+    if (showAbout) AboutDialog(onDismiss = { showAbout = false })
     if (editingRx) ReceiverDialog(manualRx, onDismiss = { editingRx = false }) { RadioRepo.manualReceiver = it; editingRx = false }
     if (adding) AddStationDialog(onDismiss = { adding = false }) { n, u, k -> RadioRepo.addCustom(n, u, k); adding = false }
     removing?.let { s ->
@@ -421,6 +429,36 @@ private fun HfTuner(s: Station, receiver: Pair<String, String>?) {
         if (rxName != null) Text("عبر مستقبِل: $rxName", color = col.muted, fontSize = 11.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp))
     }
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val col = LocalColors.current
+    val ctx = LocalContext.current
+    val version = remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "—"
+    }
+    @Composable
+    fun row(label: String, value: String, ltr: Boolean = false) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(label, color = col.muted, fontSize = 14.sp, modifier = Modifier.width(110.dp))
+            Text(value, color = col.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                style = TextStyle(textDirection = if (ltr) TextDirection.Ltr else TextDirection.Content))
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("عن البرنامج") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("راديو عُمان", color = col.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                row("الإصدار", version, ltr = true)
+                row("مصمم البرنامج", "Ashraf Ahmed Alahjji", ltr = true)
+                row("برمجة التطبيق", "Claude Opus 5.5", ltr = true)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } },
+    )
 }
 
 @Composable
