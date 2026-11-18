@@ -197,7 +197,6 @@ object RadioRepo {
 
     // Broadcast times: British DX Club "Middle East on Shortwave", winter season B26 (to late March 2027).
     private val HF_PRESETS = listOf(
-        hf("hf-bbc-ar", "بي بي سي عربي · مرحّل عُمان", "BBC Arabic", 9650.0, "am", w(setOf(1, 2, 3, 4, 5), "1500", "1530")),
         hf("hf-ham40", "هواة اللاسلكي · 40 متر", "Amateur 40 m", 7150.0, "lsb"),
         hf("hf-ham20", "هواة اللاسلكي · 20 متر", "Amateur 20 m", 14200.0, "usb"),
     )
