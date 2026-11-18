@@ -246,12 +246,6 @@ object RadioRepo {
             Variant("https://playoutonestreaming.com/proxy/muscatfm/?mp=/stream", 0, "", false),
             Variant("http://rss-streaming.co.uk:8022/mp3", 0, "MP3", false),
         )),
-        // Shabiba FM, 97.5 / 98.5 FM Muscat — stream from the station's own server.
-        Station("shabibafm", "Shabiba FM", "إذاعة الشبيبة", 0, listOf(
-            Variant("https://stream.shabiba.fm:9010/shabiba", 0, "", false),
-            Variant("http://stream.shabiba.fm:8000/live", 0, "", false),
-            Variant("http://stream.shabiba.fm:8000/shabiba", 0, "", false),
-        )),
         // Oman Radio's youth channel, from the broadcaster's own streaming CDN (same servers as Quran Radio).
         Station("shabab", "Oman Youth Radio", "إذاعة الشباب", 0, listOf(
             Variant("https://partrdo.mangomolo.com/shababrdo.mp3", 0, "MP3", false),
@@ -269,6 +263,7 @@ object RadioRepo {
         ), intl = true),
     )
 
+    // Also hides directory copies of these (Shabiba FM removed on request: its streams don't play).
     private val BUILTIN_MATCH = Regex("shabiba|الشبيبة|sawt\\s*al\\s*khaleej|صوت\\s*الخليج|sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة|muscat\\s*fm|مسقط\\s*(اف|إف)\\s*ام", RegexOption.IGNORE_CASE)
 
     /** Directory entries left out of the app on purpose. */
