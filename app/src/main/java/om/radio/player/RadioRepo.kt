@@ -200,12 +200,6 @@ object RadioRepo {
         hf("hf-bbc-ar", "بي بي سي عربي · مرحّل عُمان", "BBC Arabic", 9650.0, "am", w(setOf(1, 2, 3, 4, 5), "1500", "1530")),
         hf("hf-bbc-en", "بي بي سي بالإنجليزية · مرحّل عُمان", "BBC World Service", 12095.0, "am",
             w(setOf(2, 3, 4, 5, 6), "1500", "1700"), w(setOf(1), "1500", "1830")),
-        hf("hf-bbc-fa", "بي بي سي فارسي · مرحّل عُمان", "BBC Persian", 6000.0, "am", w(DAILY, "1630", "1700")),
-        hf("hf-kuwait", "إذاعة الكويت", "Radio Kuwait", 7250.0, "am", w(DAILY, "0800", "1000")),
-        hf("hf-vot-ar", "صوت تركيا بالعربية", "Voice of Turkiye Arabic", 7255.0, "am", w(DAILY, "1500", "1600")),
-        hf("hf-vot-en", "صوت تركيا بالإنجليزية", "Voice of Turkiye English", 7285.0, "am", w(DAILY, "0400", "0500")),
-        hf("hf-irib-1", "الإذاعة الإيرانية العربية", "IRIB Arabic", 15135.0, "am", w(DAILY, "0600", "0830"), w(DAILY, "1430", "1730")),
-        hf("hf-irib-2", "الإذاعة الإيرانية العربية", "IRIB Arabic", 15240.0, "am", w(DAILY, "0930", "1430")),
         hf("hf-ham40", "هواة اللاسلكي · 40 متر", "Amateur 40 m", 7150.0, "lsb"),
         hf("hf-ham20", "هواة اللاسلكي · 20 متر", "Amateur 20 m", 14200.0, "usb"),
     )
@@ -249,6 +243,12 @@ object RadioRepo {
         // Sultan's Armed Forces radio — 95.1 FM in Muscat (launched 11 Jan 2021).
         Station("alsumood", "Al Sumood FM 95.1", "إذاعة الصمود", 0,
             listOf(Variant("https://us3.internet-radio.com/proxy/alsumoodfm2020?mp=/stream", 0, "MP3", false))),
+        // Muscat FM, 105.3 FM — private Arabic station; stream hosted on Aiir.
+        Station("muscatfm", "Muscat FM 105.3", "مسقط إف إم", 0, listOf(
+            Variant("https://stream.aiir.com/r9fyk1khuywtv", 0, "", false),
+            Variant("https://playoutonestreaming.com/proxy/muscatfm/?mp=/stream", 0, "", false),
+            Variant("http://rss-streaming.co.uk:8022/mp3", 0, "MP3", false),
+        )),
         // Oman Radio's youth channel, from the broadcaster's own streaming CDN (same servers as Quran Radio).
         Station("shabab", "Oman Youth Radio", "إذاعة الشباب", 0, listOf(
             Variant("https://partrdo.mangomolo.com/shababrdo.mp3", 0, "MP3", false),
@@ -257,7 +257,7 @@ object RadioRepo {
             Variant("https://partwota.cdn.mgmlcdn.com/shababrdoorg/shababrdo.stream_aac/playlist.m3u8", 0, "AAC", true),
         )),
     )
-    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة", RegexOption.IGNORE_CASE)
+    private val BUILTIN_MATCH = Regex("sumood|samood|sumoud|الصمود|shabab|youth\\s*(program|radio)\\s*oman|الشباب|public\\s*radio\\s*oman|oman\\s*radio\\s*\\(|الإذاعة.العامة|muscat\\s*fm|مسقط\\s*(اف|إف)\\s*ام", RegexOption.IGNORE_CASE)
 
     /** Directory entries left out of the app on purpose. */
     private val BLOCKED = listOf(Regex("^\\W*oman\\s*fm\\b", RegexOption.IGNORE_CASE))
