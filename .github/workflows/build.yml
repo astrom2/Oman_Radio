@@ -40,12 +40,15 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Name the APK
-        run: cp app/build/outputs/apk/release/app-release.apk "OmanRadio-1.0.${{ github.run_number }}.apk"
+        # A fixed-name copy too, so the README link .../releases/latest/download/OmanRadio.apk always works.
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "OmanRadio-1.0.${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk OmanRadio.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: OmanRadio-apk
-          path: OmanRadio-*.apk
+          path: OmanRadio-1.0.${{ github.run_number }}.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -53,5 +56,7 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: راديو عُمان 1.0.${{ github.run_number }}
           body: نزّل ملف APK وثبّته على الهاتف. كل نسخة جديدة تُثبَّت فوق السابقة.
-          files: OmanRadio-*.apk
+          files: |
+            OmanRadio-1.0.${{ github.run_number }}.apk
+            OmanRadio.apk
           make_latest: true
